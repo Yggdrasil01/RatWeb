@@ -1,0 +1,37 @@
+variables:
+  GIT_SUBMODULE_STRATEGY: normal
+
+stages:
+  - build
+  - deploy
+build:
+  stage: build
+  image: archlinux/base:latest
+  before_script:
+  - "echo 'Server = https://ftp.fau.de/archlinux/$repo/os/$arch' > /etc/pacman.d/mirrorlist"
+  - pacman -Sy --noconfirm --noprogressbar --needed hugo | uniq
+  script:
+  - hugo -D
+  artifacts:
+    paths:
+    - public
+    expire_in: 1 hour
+  only:
+   - master
+    
+deploy:
+  image: debian:buster
+  stage: deploy
+  before_script:
+    - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
+    - 'which rsync || ( apt-get update -y && apt-get install rsync -y )'
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | ssh-add - > /dev/null
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan -t rsa $HOST >> ~/.ssh/known_hosts
+  script:
+    - rsync -az public/ deploy@$HOST:/var/www/public --delete
+  only:
+  - master
+
